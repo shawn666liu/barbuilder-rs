@@ -1,0 +1,15 @@
+[package]
+name = "barbuilder"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "*"
+# dyn-clone = "1.0"
+log = "*"
+chrono = { version = "*", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+tradesession = { version = "*", git = "https://github.com/shawn666liu/tradesession-rs.git" }
+
+[dev-dependencies]
+csv = "*"

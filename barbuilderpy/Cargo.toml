@@ -1,0 +1,18 @@
+[package]
+name = "barbuilderpy"
+version = "0.1.0"
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "barbuilderpy"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+anyhow = "*"
+chrono = "^0.4"
+barbuilder = { version = "*", path = "../barbuilder-rs" }
+tradesession = { version = "*", git = "https://github.com/shawn666liu/tradesession-rs.git" }
+# pyo3的版本受到pyo3-stub-gen的限制
+pyo3 = { version = "0.25.1", features = ["macros", "chrono"] }
+pyo3-stub-gen = { version = "^0.11" }

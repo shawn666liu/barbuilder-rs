@@ -1,0 +1,20 @@
+[package]
+name = "barbuilderpp"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "barbuilderpp"
+path = "src/barbuilderpp.rs"
+crate-type = ["cdylib"]
+
+
+[dependencies]
+anyhow = "*"
+chrono = "^0.4"
+cxx = "*"
+barbuilder = { version = "*", path = "../barbuilder-rs" }
+tradesession = { version = "*", git = "https://github.com/shawn666liu/tradesession-rs.git" }
+
+[build-dependencies]
+cxx-build = "*"
