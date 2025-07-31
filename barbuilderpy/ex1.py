@@ -60,9 +60,11 @@ def genbar_test():
                 print_bar(bar)
         pass
 
-    ticktime += dt.timedelta(seconds=6)
+    # 确保最后的bar被关闭，
+    # 由于最后一个bar的结束时间是15:00:01,所以now的时间比最后时间及threshold超出1秒
+    now = ticktime + dt.timedelta(seconds=6)
     print(f"\n\nontimer {ticktime}")
-    closed = instbb.on_timer(ticktime, dt.timedelta(seconds=5))
+    closed = instbb.on_timer(now, threshold=dt.timedelta(seconds=5))
     if len(closed) > 0:
         print("ontimer closed bar:")
         for bar in closed:

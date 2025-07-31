@@ -65,7 +65,8 @@ mod tests {
         bar.turnover = 94017413385.0;
         let mut prebars: HashMap<u32, BarData> = HashMap::new();
         prebars.insert(barsize_sec, bar);
-        let mut bb = InstBarBuilder::new1("ag2510", &vec![barsize_sec], &ts, Some(prebars), true);
+        let mut bb = InstBarBuilder::new1("ag2510", &vec![barsize_sec], &ts, true);
+        bb.set_pre_bars(prebars).expect("no fail");
         let mut closed_this_tick: Vec<BarData> = vec![];
         let mut updated_this_tick: Vec<BarData> = vec![];
         let mut tick = TickData::default();

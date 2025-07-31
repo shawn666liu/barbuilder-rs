@@ -1,3 +1,4 @@
+use anyhow::{Result, anyhow};
 use chrono::Duration;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
@@ -24,7 +25,7 @@ struct LastBarCache {
     ///
     /// 仅在创建新Bar时修改,否则保持前值，无需每tick更新
     ///
-    /// todo:是否包括with_slice_end信息?
+    /// 包括with_slice_end信息
     pub last_bar_end: NaiveDateTime,
 
     /// last_bar_end在BarTime队列中的索引，
@@ -75,70 +76,19 @@ pub struct SingleBarBuilder {
 }
 
 impl SingleBarBuilder {
-    pub fn new(
-        inst: &str,
-        barsz_sec: u32,
-        vec: &Vec<BarTime>,
-        zero_vol_bar: bool,
-        pre_bar: Option<BarData>,
-    ) -> Self {
-        let mut to_cmp = BarTime::default();
-        let mut bar_index = -1;
-        let mut pre_bar = pre_bar;
+    pub fn new(inst: &str, barsz_sec: u32, bar_time_vec: Vec<BarTime>, zero_vol_bar: bool) -> Self {
         let mut last_cache = LastBarCache::default();
+        last_cache.last_bar_index = -1;
 
-        // 有prebar的情况，比如实盘中在极短后重启软件时，有保存加载机制，加载了旧Bar,
-        // 而且这个bar的周期比较长，比如30分K,或者小时K,尚未走完，则可以利用上这个prebar
-        if let Some(bar) = &mut pre_bar {
-            // 这个virtual_end并不准确，比如10:00开始的30分k线，其实duration只有15分钟(后15分钟休市了)，
-            // 而不是30分钟， 所以我们先search end, 不行再search begin
-            let begin = bar.begin.time();
-            to_cmp.virtual_end = ShiftedTime::from(begin + Duration::seconds(barsz_sec.into()));
-            bar_index = Self::search_end_time_index(&to_cmp, vec);
-            if bar_index == -1 {
-                to_cmp.virtual_begin = ShiftedTime::from(begin);
-                bar_index = Self::search_begin_time_index(&to_cmp, vec);
-            }
-
-            // 无法保证外部传入的prebar的internal_end是准确的，重算
-            if bar_index >= 0 {
-                let bt = &vec[bar_index as usize];
-                let mut bar_end = bar.begin + bt.duration;
-                if bt.with_slice_end {
-                    bar_end += Duration::seconds(1);
-                }
-                bar.internal_end = bar_end;
-                last_cache.last_bar_end = bar_end;
-                last_cache.last_bar_close = bar.close;
-                last_cache.last_tradeday = bar.tradeday;
-
-                // 注意： 由于这个模块可用于历史数据回放，不应该调用now()函数，
-                // 所以，finished这个判断，丢给on_tick()或者on_timer()
-
-                // let now = Local::now().naive_local();
-                // if now < bar_end {
-                //     bar.finished = false;
-                // }
-            }
-            log::trace!(
-                "SingleBarBuilder::new(), prebar: bar_index {:>3}, barsz {:>4}, bar {:?}",
-                bar_index,
-                barsz_sec,
-                bar
-            );
-        }
-
-        last_cache.last_bar_index = bar_index;
         Self {
             inst: inst.to_owned(),
             barsz_sec,
-            bar_time_vec: vec.to_vec(),
+            bar_time_vec,
             tick_idx: -1,
-            // last_bar 与 bar_index 必须是一致的
-            last_bar: if bar_index >= 0 { pre_bar } else { None },
+            last_bar: None,
             opt_closed_this_tick: None,
             zerovol_bar_vec: Vec::default(),
-            to_cmp,
+            to_cmp: BarTime::default(),
             zero_vol_bar,
             last_cache,
         }
@@ -158,6 +108,58 @@ impl SingleBarBuilder {
 
     pub fn bar_time_vec(&self) -> &Vec<BarTime> {
         &self.bar_time_vec
+    }
+
+    /// 注意!!! 必须在on_tick调用之前，任何on_tick调用之后，都不能再设置prebar
+    ///
+    /// 有prebar的情况，比如实盘中在极短后重启软件时，有保存加载机制，加载了旧Bar,
+    /// 而且这个bar的周期比较长，比如30分K,或者小时K,尚未走完，则可以利用上这个prebar
+    pub fn set_pre_bar(&mut self, mut bar: BarData) -> Result<()> {
+        if self.tick_idx >= 0 || self.last_cache.last_bar_index >= 0 {
+            return Err(anyhow!("set_pre_bar() must called before any on_tick()"));
+        }
+
+        // 这个virtual_end并不准确，比如10:00开始的30分k线，其实duration只有15分钟(后15分钟休市了)，
+        // 而不是30分钟， 所以我们先search end, 不行再search begin
+        let begin = bar.begin.time();
+        self.to_cmp.virtual_end =
+            ShiftedTime::from(begin + Duration::seconds(self.barsz_sec.into()));
+        let mut bar_index = Self::search_end_time_index(&self.to_cmp, &self.bar_time_vec);
+        if bar_index == -1 {
+            self.to_cmp.virtual_begin = ShiftedTime::from(begin);
+            bar_index = Self::search_begin_time_index(&self.to_cmp, &self.bar_time_vec);
+        }
+
+        // 无法保证外部传入的prebar的internal_end是准确的，重算
+        if bar_index >= 0 {
+            let bt = &self.bar_time_vec[bar_index as usize];
+            let mut bar_end = bar.begin + bt.duration;
+            if bt.with_slice_end {
+                bar_end += Duration::seconds(1);
+            }
+            bar.internal_end = bar_end;
+            self.last_cache.last_bar_end = bar_end;
+            self.last_cache.last_bar_close = bar.close;
+            self.last_cache.last_tradeday = bar.tradeday;
+            self.last_cache.last_bar_index = bar_index;
+
+            // 注意： 由于这个模块可用于历史数据回放，不应该调用now()函数，
+            // 所以，finished这个判断，丢给on_tick()或者on_timer()
+
+            // let now = Local::now().naive_local();
+            // bar.finished = now >= bar_end;
+
+            log::trace!(
+                "SingleBarBuilder::set_pre_bar(), bar_index {:>3}, barsz {:>4}, bar {:?}",
+                bar_index,
+                self.barsz_sec,
+                bar
+            );
+
+            // last_bar 与 bar_index 必须是一致的
+            self.last_bar = Some(bar);
+        }
+        Ok(())
     }
 
     /// 返回值，是否需要生成新Bar

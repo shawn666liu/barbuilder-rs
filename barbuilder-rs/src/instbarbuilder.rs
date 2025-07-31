@@ -1,3 +1,4 @@
+use anyhow::Result;
 use chrono::{Duration, NaiveDateTime};
 use std::collections::HashMap;
 use tradesession::TradeSession;
@@ -34,19 +35,17 @@ impl InstBarBuilder {
     /// 从Vec<BarTime> map创建
     pub fn new(
         inst: &str,
-        barsz_vs_bartime_map: &HashMap<u32, Vec<BarTime>>,
-        mut opt_pre_bars: Option<HashMap<u32, BarData>>,
+        barsz_vs_bartime_map: HashMap<u32, Vec<BarTime>>,
         zero_vol_bar: bool,
     ) -> Self {
         if barsz_vs_bartime_map.is_empty() {
             log::error!("InstBarBuilder::new1, barsz_vs_bartime_map should not be empty")
         }
-        let mut builders: HashMap<u32, SingleBarBuilder> = Default::default();
-        for (&barsz, vec) in barsz_vs_bartime_map.iter() {
-            let pre_bar: Option<BarData> = opt_pre_bars.as_mut().and_then(|map| map.remove(&barsz));
-            let bldr = SingleBarBuilder::new(&inst, barsz, vec, zero_vol_bar, pre_bar);
-            builders.insert(barsz, bldr);
-        }
+        let builders: HashMap<u32, SingleBarBuilder> = barsz_vs_bartime_map
+            .into_iter()
+            .map(|(barsz, vec)| (barsz, SingleBarBuilder::new(inst, barsz, vec, zero_vol_bar)))
+            .collect();
+
         Self {
             inst: inst.to_string(),
             single_bb_map: builders,
@@ -62,7 +61,7 @@ impl InstBarBuilder {
         inst: &str,
         barsz_sec: &Vec<u32>,
         session: &TradeSession,
-        opt_pre_bars: Option<HashMap<u32, BarData>>,
+        // opt_pre_bars: Option<HashMap<u32, BarData>>,
         zero_vol_bar: bool,
     ) -> Self {
         if barsz_sec.is_empty() {
@@ -72,7 +71,7 @@ impl InstBarBuilder {
             .iter()
             .map(|sz| (*sz, BarTime::vec_from_session(&session, *sz)))
             .collect();
-        Self::new(inst, &barsz_vs_bartime_map, opt_pre_bars, zero_vol_bar)
+        Self::new(inst, barsz_vs_bartime_map, zero_vol_bar)
     }
 
     /// 从session_minutes创建
@@ -80,11 +79,20 @@ impl InstBarBuilder {
         inst: &str,
         barsz_sec: &Vec<u32>,
         session_minutes: Vec<u16>,
-        opt_pre_bars: Option<HashMap<u32, BarData>>,
         zero_vol_bar: bool,
     ) -> Self {
         let session = TradeSession::new_from_minutes(session_minutes);
-        Self::new1(inst, barsz_sec, &session, opt_pre_bars, zero_vol_bar)
+        Self::new1(inst, barsz_sec, &session, zero_vol_bar)
+    }
+
+    /// 注意!!! 必须在on_tick调用之前，任何on_tick调用之后，都不能再设置prebar
+    pub fn set_pre_bars(&mut self, mut pre_bars: HashMap<u32, BarData>) -> Result<()> {
+        for (barsz, bb) in self.single_bb_map.iter_mut() {
+            if let Some(pre_bar) = pre_bars.remove(barsz) {
+                bb.set_pre_bar(pre_bar)?;
+            }
+        }
+        Ok(())
     }
 
     pub fn inst(&self) -> &str {

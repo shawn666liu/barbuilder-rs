@@ -1,5 +1,6 @@
 // #![cfg_attr(debug_assertions, allow(dead_code, unused_imports, unused_variables))]
 
+use anyhow::Result;
 use chrono::{DateTime, Datelike, NaiveDate};
 use std::collections::HashMap;
 
@@ -19,23 +20,9 @@ pub fn create_inst_barbuilder(
     inst: &str,
     barsz_sec: &Vec<u32>,
     session_minutes: Vec<u16>,
-    pre_bars: &Vec<ffi::CppBar>,
     zero_vol_bar: bool,
 ) -> Box<InstBarBuilderPP> {
-    let opt_pre_bars: Option<HashMap<u32, BarData>> = (!pre_bars.is_empty()).then(|| {
-        pre_bars
-            .iter()
-            .map(|bar| (bar.barsz_sec, bar.into()))
-            .collect()
-    });
-
-    let instbb = barbuilder::InstBarBuilder::new2(
-        inst,
-        barsz_sec,
-        session_minutes,
-        opt_pre_bars,
-        zero_vol_bar,
-    );
+    let instbb = barbuilder::InstBarBuilder::new2(inst, barsz_sec, session_minutes, zero_vol_bar);
     Box::new(InstBarBuilderPP { instbb })
 }
 
@@ -84,9 +71,13 @@ mod ffi {
             inst: &str,
             barsz_sec: &Vec<u32>,
             session_minutes: Vec<u16>,
-            pre_bars: &Vec<CppBar>,
             zero_vol_bar: bool,
         ) -> Box<InstBarBuilderPP>;
+
+        /// 注意!!! 必须在on_tick调用之前，任何on_tick调用之后，都不能再设置prebar
+        ///
+        /// CppBar已自带barsize信息，
+        fn set_pre_bars(&mut self, pre_bars: &Vec<CppBar>) -> Result<()>;
 
         /// 如果realtime_feed为空，则updated_this_tick不会被填充
         /// 返回值，tick是否在此合约的tradesession之内
@@ -215,6 +206,17 @@ impl Into<TickData> for CppTick {
 }
 
 impl InstBarBuilderPP {
+    pub fn set_pre_bars(&mut self, pre_bars: &Vec<ffi::CppBar>) -> Result<()> {
+        if !pre_bars.is_empty() {
+            let pre_bars: HashMap<u32, BarData> = pre_bars
+                .iter()
+                .map(|bar| (bar.barsz_sec, bar.into()))
+                .collect();
+            self.instbb.set_pre_bars(pre_bars)?;
+        }
+        Ok(())
+    }
+
     pub fn on_tick(
         &mut self,
         closed_this_tick: &mut Vec<CppBar>,

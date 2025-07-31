@@ -10,7 +10,6 @@ use std::vec;
 
 use barbuilder::Ticklike;
 
-#[allow(dead_code)]
 fn to_pyerr(err: anyhow::Error) -> PyErr {
     PyErr::new::<PyException, _>(err.to_string())
 }
@@ -191,27 +190,24 @@ impl InstBarBuilder {
         inst: &str,
         barsz_sec: Vec<u32>,
         session_minutes: Vec<u16>,
-        pre_bar_map: HashMap<u32, BarData>,
+
         zero_vol_bar: bool,
     ) -> Self {
-        let opt_pre_bars = match pre_bar_map.is_empty() {
-            true => None,
-            _ => Some(
-                pre_bar_map
-                    .iter()
-                    .map(|(sz, bar)| (*sz, bar.into()))
-                    .collect(),
-            ),
-        };
-
-        let instbb = barbuilder::InstBarBuilder::new2(
-            inst,
-            &barsz_sec,
-            session_minutes,
-            opt_pre_bars,
-            zero_vol_bar,
-        );
+        let instbb =
+            barbuilder::InstBarBuilder::new2(inst, &barsz_sec, session_minutes, zero_vol_bar);
         InstBarBuilder { instbb }
+    }
+
+    /// 注意!!! 必须在on_tick调用之前，任何on_tick调用之后，都不能再设置prebar
+    pub fn set_pre_bars(&mut self, pre_bar_map: HashMap<u32, BarData>) -> PyResult<()> {
+        if !pre_bar_map.is_empty() {
+            let pre_bars: HashMap<u32, barbuilder::data_impl::BarData> = pre_bar_map
+                .iter()
+                .map(|(sz, bar)| (*sz, bar.into()))
+                .collect();
+            self.instbb.set_pre_bars(pre_bars).map_err(to_pyerr)?;
+        }
+        Ok(())
     }
 
     pub fn to_string(&self) -> String {

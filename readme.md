@@ -4,7 +4,15 @@
 https://github.com/shawn666liu/tradesession-rs.git
 
 ### 用途及特点
+输入tick,输出K线   
+可以输出完结的bar及实时更新的bar  
+可以输出成交量为零的bar  
+正确处理集合竞价数据  
+支持rust/c++/python
 
+### 用法示例
+参看 barbuilderpy/ex1.py 文件  
+rust/c++用法类似  
 
 ### K线切分说明
 切分k线时，使用左开右闭区间(]，整点时间是属于前一个周期的，集合竞价属于其后周期，    
@@ -46,12 +54,38 @@ on_timer(now, threshold), 如果now时间超出该bar结束时间已经大于thr
 
 
 ### 周五夜盘延续到周一白天的问题
-on_tick()总是在市场行情有推送的时候才会调用，所以不会有问题。
-但是on_timer()不同，内部没有处理非交易日的情况，如果在周六周日白天调用就会有问题，
-所以，应该在tradesession的时间段外，停止on_timer()调用。
-建议每个交易日结束之后，销毁barbuilder，下一个交易日再重建。
+on_tick()总是在市场行情有推送的时候才会调用，所以不会有问题。  
+但是on_timer()不同，内部没有处理非交易日的情况，如果在周六周日白天调用就会有问题，  
+所以，应该在tradesession的时间段外，停止on_timer()调用。  
+建议每个交易日结束之后，销毁barbuilder，下一个交易日再重建。  
 
 ### 其他注意事项
 创建InstBarBuilder时，pre_bar的交易日必须是当前交易日(对于回放则必须是特定的交易日)，非当前交易日的应该提前过滤掉。  
-同样，调用on_tick时，所有tick的交易日也必须是当前或特定的交易日。
-建议每个交易日结束之后，销毁barbuilder，下一个交易日再重建。
+同样，调用on_tick时，所有tick的交易日也必须是当前或特定的交易日。 
+建议每个交易日结束之后，销毁barbuilder，下一个交易日再重建。  
+
+### Python 绑定
+- 切换到需要的虚拟环境  
+conda activate your-env-name
+- 生成/更新pyi, (可能需要把LD_LIBARY_PATH指向你env所在的lib目录)  
+cargo run --bin stub_gen  或者  
+LD_LIBARY_PATH=???env/lib  cargo run --bin stub_gen   
+- 进入barbuilderpy子目录  
+cd barbuilderpy
+- 安装maturin  
+https://github.com/PyO3/maturin  
+conda install maturin 
+或者 pip install maturin  
+- 编译该虚拟环境对应python版本的whl包,用以分发然后手动安装  
+maturin build --release
+- 或者,直接为当前虚拟环境安装whl包  
+maturin develop --release
+
+### C++绑定
+- 编译release版本通过
+- 复制target/cxxbridge/{rust, barbuilderpp}及之下的所有.h和.cc文件  
+  包括cxx.h, ???.rs.h, ???.rs.cc  
+- 下载cxx.cc文件,   
+  https://raw.githubusercontent.com/dtolnay/cxx/refs/heads/master/src/cxx.cc
+- 复制target/release下面的barbuilderpp.{dll,lib}文件, linux下则为libbarbuilderpp.so
+- c++封装文件: 在barbuilderpp/wrapper目录下，复制到c++项目

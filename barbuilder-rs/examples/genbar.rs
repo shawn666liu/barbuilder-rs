@@ -25,7 +25,7 @@ fn main() -> Result<()> {
     let bar_size_vec = vec![900, 3600];
 
     let ts = TradeSession::new_commodity_session_night();
-    let mut bb = InstBarBuilder::new1("ag2510", &bar_size_vec, &ts, None, true);
+    let mut bb = InstBarBuilder::new1("ag2510", &bar_size_vec, &ts, true);
 
     let tickcsv = include_str!("../../tick_ag2510_partial.csv");
     let mut rdr = csv::Reader::from_reader(tickcsv.as_bytes());
