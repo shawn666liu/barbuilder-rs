@@ -80,8 +80,12 @@ pub fn get_inst_month(instrument: &str, expire_year: i16) -> (i16, i16) {
 ///
 /// CF001 => CF2001  
 ///
-/// tick_cf001 => tick_cf2001  
-pub fn fix_czce_inst(czce_inst: &str, this_year: i16) -> Cow<str> {
+pub fn fix_czce_inst(czce_inst: &str, this_year: i16) -> Cow<'_, str> {
+    // 原始的郑州合约长度一定是5
+    if czce_inst.len() != 5 {
+        return Cow::Borrowed(czce_inst);
+    }
+
     // 计算末尾的连续数字
     let mut count = 0;
     for c in czce_inst.chars().rev() {
@@ -91,7 +95,7 @@ pub fn fix_czce_inst(czce_inst: &str, this_year: i16) -> Cow<str> {
         }
     }
     // 如果末尾已经有4位数字，或者不足3位数字，则什么也不做
-    if count >= 4 || count < 3 {
+    if count != 3 {
         return Cow::Borrowed(czce_inst);
     }
 
@@ -127,7 +131,7 @@ pub fn fix_czce_inst(czce_inst: &str, this_year: i16) -> Cow<str> {
 /// 还原原始的郑州合约，只有三个数字
 ///
 /// TA2109 或者 TA1109 -> TA109
-pub fn restore_czce_inst(czce_inst: &str) -> Cow<str> {
+pub fn restore_czce_inst(czce_inst: &str) -> Cow<'_, str> {
     // 计算末尾的连续数字
     let mut count = 0;
     for c in czce_inst.chars().rev() {

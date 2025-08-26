@@ -67,7 +67,7 @@ on_tick()总是在市场行情有推送的时候才会调用，所以不会有�
 ### Python 绑定
 - 切换到需要的虚拟环境  
 conda activate your-env-name
-- 生成/更新pyi, (可能需要把LD_LIBARY_PATH指向你env所在的lib目录)  
+- 生成/更新pyi, (可能需要把LD_LIBARY_PATH指向你虚拟环境env所在的lib目录)  
 cargo run --bin stub_gen  或者  
 LD_LIBARY_PATH=???env/lib  cargo run --bin stub_gen   
 - 进入barbuilderpy子目录  

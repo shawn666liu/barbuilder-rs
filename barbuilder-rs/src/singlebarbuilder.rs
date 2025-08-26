@@ -138,6 +138,7 @@ impl SingleBarBuilder {
                 bar_end += Duration::seconds(1);
             }
             bar.internal_end = bar_end;
+            bar.created_this_tick = false;
             self.last_cache.last_bar_end = bar_end;
             self.last_cache.last_bar_close = bar.close;
             self.last_cache.last_tradeday = bar.tradeday;
@@ -409,8 +410,7 @@ impl SingleBarBuilder {
         }
 
         let bt = &self.bar_time_vec[self.tick_idx as usize];
-        let mut newbar = BarData::default();
-        // newbar.inst = self.inst.clone();
+        let mut newbar = BarData::new_empty();
 
         // bugfix: 由于比较tick时间时左开右闭(]的操作，对于跨零点的tick,
         // 比如，前一tick 2021-11-08 23:59:59.500, 后一tick 2021-11-09 00:00:00,
@@ -484,7 +484,7 @@ impl SingleBarBuilder {
         tradeday: &NaiveDate,
     ) -> BarData {
         let bt: &BarTime = &self.bar_time_vec[bar_idx as usize];
-        let mut bar = BarData::default();
+        let mut bar = BarData::new_empty();
 
         bar.tradeday = *tradeday;
         bar.begin = *bar_end_time - bt.duration;

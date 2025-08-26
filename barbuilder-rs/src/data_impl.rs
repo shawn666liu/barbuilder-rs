@@ -37,9 +37,19 @@ pub struct BarData {
     pub finished: bool,
     #[serde(default)]
     pub barsz_sec: u32,
+    /// 是否因本tick触发而创建,上级on_tick调用时知道哪些bar是该tick新创建的
+    #[serde(default)]
+    pub created_this_tick: bool,
 }
 
 impl BarData {
+    /// default()并设置created_this_tick
+    pub fn new_empty() -> Self {
+        let mut b = Self::default();
+        b.created_this_tick = true;
+        b
+    }
+
     pub fn new(
         tradeday: NaiveDate,
         begin: NaiveDateTime,
@@ -53,6 +63,7 @@ impl BarData {
         openint: u64,
         finished: bool,
         barsz_sec: u32,
+        created_this_tick: bool,
     ) -> Self {
         Self {
             tradeday,
@@ -67,6 +78,7 @@ impl BarData {
             openint,
             finished,
             barsz_sec,
+            created_this_tick,
         }
     }
 }

@@ -33,6 +33,11 @@ class BarData:
     def finished(self) -> builtins.bool: ...
     @property
     def barsz_sec(self) -> builtins.int: ...
+    @property
+    def created_this_tick(self) -> builtins.bool:
+        r"""
+        是否因本tick触发而创建,上级on_tick调用时知道哪些bar是该tick新创建的
+        """
     @tradeday.setter
     def tradeday(self, value: datetime.date) -> None: ...
     @begin.setter
@@ -60,6 +65,11 @@ class BarData:
     def finished(self, value: builtins.bool) -> None: ...
     @barsz_sec.setter
     def barsz_sec(self, value: builtins.int) -> None: ...
+    @created_this_tick.setter
+    def created_this_tick(self, value: builtins.bool) -> None:
+        r"""
+        是否因本tick触发而创建,上级on_tick调用时知道哪些bar是该tick新创建的
+        """
     def __new__(cls) -> BarData: ...
     def __repr__(self) -> builtins.str: ...
 
@@ -72,20 +82,22 @@ class InstBarBuilder:
     def to_string(self) -> builtins.str: ...
     def on_tick(self, tick:TickData, realtime_feed:builtins.bool) -> tuple[builtins.bool, builtins.list[BarData], typing.Optional[builtins.list[BarData]]]:
         r"""
-        返回值，tick是否在此合约的tradesession之内
-        closed_this_tick: 本tick内关闭的bar
-        updated_this_tick: 收集Bar的实时变化信息，高开低收量，适用每tick推送的场景
+        返回值，tick是否在此合约的tradesession之内，
+        closed_this_tick: 本tick内关闭的bar，
+        updated_this_tick: 收集Bar的实时变化信息，高开低收量，适用每tick推送的场景，
+        输出都是小周期的在前
         """
     def on_tick_detail(self, tradeday:datetime.date, datetime:datetime.datetime, last:builtins.float, openint:builtins.int, volume:builtins.int, turnover:builtins.float, vol_delta:builtins.int, tnov_delta:builtins.float, realtime_feed:builtins.bool) -> tuple[builtins.bool, builtins.list[BarData], typing.Optional[builtins.list[BarData]]]:
         r"""
-        返回值，tick是否在此合约的tradesession之内
-        closed_this_tick: 本tick内关闭的bar
-        updated_this_tick: 收集Bar的实时变化信息，高开低收量，适用每tick推送的场景
+        返回值，tick是否在此合约的tradesession之内，
+        closed_this_tick: 本tick内关闭的bar，
+        updated_this_tick: 收集Bar的实时变化信息，高开低收量，适用每tick推送的场景，
+        输出都是小周期的在前
         """
     def on_timer(self, now:datetime.datetime, threshold:datetime.timedelta) -> builtins.list[BarData]:
         r"""
-        若last_bar的结束时间小于(now-threshold), 则关闭该bar
-        返回关闭的bar
+        若last_bar的结束时间小于(now-threshold), 则关闭该bar，
+        返回关闭的bar，输出都是小周期的在前
         """
 
 class TickData:

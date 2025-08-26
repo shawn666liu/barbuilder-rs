@@ -11,7 +11,8 @@ pub struct InstBarBuilder {
     inst: String,
 
     /// 不同的barsize，需要不同的BarBuilder
-    single_bb_map: HashMap<u32, SingleBarBuilder>,
+    /// barsize从小到大排列
+    single_bb_map: Vec<SingleBarBuilder>,
 
     /// 临时变量，本次on_tick中，这些barsize的builder需要检查并创建新bar，每tick清空
     need_create_barsz: Vec<u32>,
@@ -35,21 +36,31 @@ impl InstBarBuilder {
     /// 从Vec<BarTime> map创建
     pub fn new(
         inst: &str,
-        barsz_vs_bartime_map: HashMap<u32, Vec<BarTime>>,
+        mut barsz_vs_bartime_map: HashMap<u32, Vec<BarTime>>,
         zero_vol_bar: bool,
     ) -> Self {
-        if barsz_vs_bartime_map.is_empty() {
-            log::error!("InstBarBuilder::new1, barsz_vs_bartime_map should not be empty")
-        }
-        let builders: HashMap<u32, SingleBarBuilder> = barsz_vs_bartime_map
-            .into_iter()
-            .map(|(barsz, vec)| (barsz, SingleBarBuilder::new(inst, barsz, vec, zero_vol_bar)))
+        // 丢弃barsize超过86400的
+        let bad: HashMap<u32, Vec<BarTime>> = barsz_vs_bartime_map
+            .extract_if(|&sz, _| sz >= 86400)
             .collect();
+        if !bad.is_empty() {
+            log::error!(
+                "InstBarBuilder::new, barsz_vs_bartime_map barsize should not big than 86400"
+            )
+        }
+        if barsz_vs_bartime_map.is_empty() {
+            log::error!("InstBarBuilder::new, barsz_vs_bartime_map should not be empty")
+        }
+        let mut builders: Vec<SingleBarBuilder> = barsz_vs_bartime_map
+            .into_iter()
+            .map(|(barsz, vec)| SingleBarBuilder::new(inst, barsz, vec, zero_vol_bar))
+            .collect();
+
+        builders.sort_by(|a, b| a.barsz_sec().cmp(&b.barsz_sec()));
 
         Self {
             inst: inst.to_string(),
             single_bb_map: builders,
-            // recent_time: NaiveDateTime::default(),
             bar_end_time: NaiveDateTime::default(),
             need_create_barsz: vec![],
             zero_vol_bar,
@@ -87,8 +98,8 @@ impl InstBarBuilder {
 
     /// 注意!!! 必须在on_tick调用之前，任何on_tick调用之后，都不能再设置prebar
     pub fn set_pre_bars(&mut self, mut pre_bars: HashMap<u32, BarData>) -> Result<()> {
-        for (barsz, bb) in self.single_bb_map.iter_mut() {
-            if let Some(pre_bar) = pre_bars.remove(barsz) {
+        for bb in self.single_bb_map.iter_mut() {
+            if let Some(pre_bar) = pre_bars.remove(&bb.barsz_sec()) {
                 bb.set_pre_bar(pre_bar)?;
             }
         }
@@ -99,9 +110,15 @@ impl InstBarBuilder {
         &self.inst
     }
 
-    /// 返回值，tick是否在此合约的tradesession之内
-    /// closed_this_tick: 本tick内关闭的bar
-    /// updated_this_tick: 收集Bar的实时变化信息，高开低收量，适用每tick推送的场景
+    /// 如果不再处理某个barsize了，则可以移除
+    pub fn remove_barsize(&mut self, barsize: u32) {
+        self.single_bb_map.retain(|bb| bb.barsz_sec() != barsize);
+    }
+
+    /// 返回值，tick是否在此合约的tradesession之内，
+    /// closed_this_tick: 本tick内关闭的bar，
+    /// updated_this_tick: 收集Bar的实时变化信息，高开低收量，适用每tick推送的场景，  
+    /// 输出都是小周期的在前
     pub fn on_tick<T>(
         &mut self,
         tick: &dyn Ticklike,
@@ -120,7 +137,8 @@ impl InstBarBuilder {
         // 是否已经在循环中设置了bar_end_time
         let mut bar_end_time_assigned = false;
         // 遍历所有的barsize，处理OnBar/OnBarClose事件，这次循环里不创建新Bar
-        for (&barsize, bb) in self.single_bb_map.iter_mut() {
+        for bb in self.single_bb_map.iter_mut() {
+            let barsize = bb.barsz_sec();
             // 利用tick_idx来计算函数的返回值：
             // 各bb的tick_idx仅在check_exists_bar()中计算一次，
             // 在调用create_new_bar()之前，其他地方是不会改变的，
@@ -174,14 +192,15 @@ impl InstBarBuilder {
 
         // 所有旧Bar推送完毕后，看看是否需要创建新Bar
         // 注意: create_new_bar()有可能修改tick_idx值, 返回值计算需在此前操作
-        for idx in self.need_create_barsz.iter() {
-            let bb = self.single_bb_map.get_mut(idx).expect("no fail");
-            bb.create_new_bar(tick);
+        for &idx in self.need_create_barsz.iter() {
+            if let Some(bb) = self.single_bb_map.iter_mut().find(|b| b.barsz_sec() == idx) {
+                bb.create_new_bar(tick);
+            }
         }
         // self.recent_time = *tick.datetime();
 
         if self.zero_vol_bar {
-            for (_, bb) in self.single_bb_map.iter_mut() {
+            for bb in self.single_bb_map.iter_mut() {
                 closed_this_tick.extend(bb.zerovol_bar_vec.iter().map(|b| T::from(b)));
                 bb.zerovol_bar_vec.clear();
             }
@@ -191,16 +210,23 @@ impl InstBarBuilder {
         if let Some(updvec) = updated_this_tick {
             updvec.extend(
                 self.single_bb_map
-                    .values()
+                    .iter()
                     .filter_map(|bb| bb.last_bar.as_ref().map(Into::into)),
             );
+        }
+
+        // 本tick已结束，重置created_this_tick
+        for bb in self.single_bb_map.iter_mut() {
+            if let Some(bar) = bb.last_bar.as_mut() {
+                bar.created_this_tick = false;
+            }
         }
 
         return tick_time_in_session;
     }
 
-    /// 若last_bar的结束时间小于(now-threshold), 则关闭该bar
-    /// closed_bars: 关闭的bar
+    /// 若last_bar的结束时间小于(now-threshold), 则关闭该bar，
+    /// closed_bars: 关闭的bar，输出都是小周期的在前
     pub fn on_timer<T>(
         &mut self,
         now: &NaiveDateTime,
@@ -209,7 +235,8 @@ impl InstBarBuilder {
     ) where
         T: for<'a> From<&'a BarData>,
     {
-        for (_, bb) in self.single_bb_map.iter_mut() {
+        // 因为这里只有closed_bars，且被take, 所以无需处理created_this_tick
+        for bb in self.single_bb_map.iter_mut() {
             bb.on_timer(now, threshold);
             if let Some(bar) = bb.opt_closed_this_tick.take() {
                 closed_bars.push(T::from(&bar));
@@ -221,7 +248,7 @@ impl InstBarBuilder {
         }
     }
 
-    /// 强制完成在force_end_time点上未结束的bar，并收集这些Bar
+    /// 强制完成在force_end_time点上未结束的bar，并收集这些Bar，输出都是小周期的在前
     pub fn force_finish<T>(&mut self, force_end_time: &NaiveDateTime, force_closed: &mut Vec<T>)
     where
         T: for<'a> From<&'a BarData>,

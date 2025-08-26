@@ -34,6 +34,7 @@ mod ffi {
         tradeday: i32,
         /// nanoseconds since epoch
         begin: i64,
+        /// 内部使用
         internal_end: i64,
         open: f64,
         high: f64,
@@ -44,6 +45,8 @@ mod ffi {
         openint: u64,
         finished: bool,
         barsz_sec: u32,
+        /// 是否因本tick触发而创建,上级on_tick调用时知道哪些bar是该tick新创建的
+        created_this_tick: bool,
     }
 
     // 因为CppTick无法携带NaiveDateTime对象，
@@ -79,10 +82,11 @@ mod ffi {
         /// CppBar已自带barsize信息，
         fn set_pre_bars(&mut self, pre_bars: &Vec<CppBar>) -> Result<()>;
 
-        /// 如果realtime_feed为空，则updated_this_tick不会被填充
-        /// 返回值，tick是否在此合约的tradesession之内
-        /// closed_this_tick: 本tick内关闭的bar
-        /// updated_this_tick: 收集Bar的实时变化信息，高开低收量，适用每tick推送的场景
+        /// 如果realtime_feed为空，则updated_this_tick不会被填充，
+        /// 返回值，tick是否在此合约的tradesession之内，
+        /// closed_this_tick: 本tick内关闭的bar，
+        /// updated_this_tick: 收集Bar的实时变化信息，高开低收量，适用每tick推送的场景，
+        /// 输出都是小周期的在前
         fn on_tick(
             self: &mut InstBarBuilderPP,
             closed_this_tick: &mut Vec<CppBar>,
@@ -90,10 +94,11 @@ mod ffi {
             tick: &CppTick,
             realtime_feed: bool,
         ) -> bool;
-        /// 如果realtime_feed为空，则updated_this_tick不会被填充
-        /// 返回值，tick是否在此合约的tradesession之内
-        /// closed_this_tick: 本tick内关闭的bar
-        /// updated_this_tick: 收集Bar的实时变化信息，高开低收量，适用每tick推送的场景
+        /// 如果realtime_feed为空，则updated_this_tick不会被填充，
+        /// 返回值，tick是否在此合约的tradesession之内，
+        /// closed_this_tick: 本tick内关闭的bar，
+        /// updated_this_tick: 收集Bar的实时变化信息，高开低收量，适用每tick推送的场景，
+        /// 输出都是小周期的在前
         fn on_tick_detail(
             self: &mut InstBarBuilderPP,
             closed_this_tick: &mut Vec<CppBar>,
@@ -109,11 +114,14 @@ mod ffi {
             realtime_feed: bool,
         ) -> bool;
 
-        /// 若last_bar的结束时间小于(now-threshold), 则关闭该bar
-        /// closed_bars: 关闭的bar
-        /// now: nanos_since_epoch
-        /// threhold: nanos_since_midnight
+        /// 若last_bar的结束时间小于(now-threshold), 则关闭该bar，
+        /// closed_bars: 关闭的bar，
+        /// now: nanos_since_epoch，
+        /// threhold: nanos_since_midnight，
+        /// 输出都是小周期的在前
         fn on_timer(&mut self, now: i64, threshold: i64, closed_bars: &mut Vec<CppBar>);
+
+        fn remove_barsize(&mut self, barsize: u32);
     }
 }
 
@@ -142,6 +150,7 @@ impl Into<BarData> for &CppBar {
             self.openint,
             self.finished,
             self.barsz_sec,
+            self.created_this_tick,
         )
     }
 }
@@ -171,6 +180,7 @@ impl From<&BarData> for CppBar {
             openint: v.openint,
             finished: v.finished,
             barsz_sec: v.barsz_sec,
+            created_this_tick: v.created_this_tick,
         }
     }
 }
@@ -264,5 +274,8 @@ impl InstBarBuilderPP {
         let now = DateTime::from_timestamp_nanos(now).naive_utc();
         let threshold = chrono::Duration::nanoseconds(threshold);
         self.instbb.on_timer(&now, threshold, closed_bars);
+    }
+    pub fn remove_barsize(&mut self, barsize: u32) {
+        self.instbb.remove_barsize(barsize);
     }
 }

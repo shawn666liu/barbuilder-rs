@@ -37,6 +37,8 @@ pub struct BarData {
     pub openint: u64,
     pub finished: bool,
     pub barsz_sec: u32,
+    /// 是否因本tick触发而创建,上级on_tick调用时知道哪些bar是该tick新创建的
+    pub created_this_tick: bool,
 }
 impl Into<barbuilder::data_impl::BarData> for BarData {
     fn into(self) -> barbuilder::data_impl::BarData {
@@ -59,6 +61,7 @@ impl Into<barbuilder::data_impl::BarData> for &BarData {
             self.openint,
             self.finished,
             self.barsz_sec,
+            self.created_this_tick,
         )
     }
 }
@@ -78,6 +81,7 @@ impl From<&barbuilder::data_impl::BarData> for BarData {
             openint: v.openint,
             finished: v.finished,
             barsz_sec: v.barsz_sec,
+            created_this_tick: v.created_this_tick,
         }
     }
 }
@@ -214,9 +218,10 @@ impl InstBarBuilder {
         format!("InstBarbuilder, {}", self.instbb.inst())
     }
 
-    /// 返回值，tick是否在此合约的tradesession之内
-    /// closed_this_tick: 本tick内关闭的bar
-    /// updated_this_tick: 收集Bar的实时变化信息，高开低收量，适用每tick推送的场景
+    /// 返回值，tick是否在此合约的tradesession之内，
+    /// closed_this_tick: 本tick内关闭的bar，
+    /// updated_this_tick: 收集Bar的实时变化信息，高开低收量，适用每tick推送的场景，
+    /// 输出都是小周期的在前
     pub fn on_tick(
         &mut self,
         tick: &TickData,
@@ -235,9 +240,10 @@ impl InstBarBuilder {
             return (insession, closed_this_tick, None);
         }
     }
-    /// 返回值，tick是否在此合约的tradesession之内
-    /// closed_this_tick: 本tick内关闭的bar
-    /// updated_this_tick: 收集Bar的实时变化信息，高开低收量，适用每tick推送的场景
+    /// 返回值，tick是否在此合约的tradesession之内，
+    /// closed_this_tick: 本tick内关闭的bar，
+    /// updated_this_tick: 收集Bar的实时变化信息，高开低收量，适用每tick推送的场景，
+    /// 输出都是小周期的在前
     pub fn on_tick_detail(
         &mut self,
         tradeday: NaiveDate,
@@ -274,12 +280,16 @@ impl InstBarBuilder {
         }
     }
 
-    /// 若last_bar的结束时间小于(now-threshold), 则关闭该bar
-    /// 返回关闭的bar
+    /// 若last_bar的结束时间小于(now-threshold), 则关闭该bar，
+    /// 返回关闭的bar，输出都是小周期的在前
     pub fn on_timer(&mut self, now: NaiveDateTime, threshold: chrono::TimeDelta) -> Vec<BarData> {
         let mut closed_this_tick = vec![];
         self.instbb.on_timer(&now, threshold, &mut closed_this_tick);
         closed_this_tick
+    }
+
+    pub fn remove_barsize(&mut self, barsize: u32) {
+        self.instbb.remove_barsize(barsize);
     }
 }
 
