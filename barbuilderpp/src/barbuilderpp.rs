@@ -26,7 +26,7 @@ pub fn create_inst_barbuilder(
     Box::new(InstBarBuilderPP { instbb })
 }
 
-#[cxx::bridge(namespace = "barbuilderpp")]
+#[cxx::bridge(namespace = "rustpp")]
 mod ffi {
     #[derive(Clone, Debug, Default)]
     struct CppBar {
