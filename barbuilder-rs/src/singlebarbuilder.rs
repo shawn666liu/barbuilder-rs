@@ -524,21 +524,22 @@ impl SingleBarBuilder {
         tradeday: &NaiveDate,
     ) {
         for idx in start_idx..end_idx_exclude {
-            let bt = self.bar_time_vec().get(idx as usize).unwrap();
-            log::warn!(
-                "need_create_zero_vol_bar, {}, begin {}",
-                self.inst,
-                bt.nominal_begin
-            );
+            if let Some(bt) = self.bar_time_vec().get(idx as usize) {
+                log::warn!(
+                    "need_create_zero_vol_bar, {}, begin {}",
+                    self.inst,
+                    bt.nominal_begin
+                );
 
-            // bugfix: 由于比较tick时间时左开右闭(]的操作，对于跨零点的tick,
-            // 比如，前一tick 2021-11-08 23:59:59.500, 后一tick 2021-11-09 00:00:00,
-            // 它们是在同一个slot里面的，如果newbar.begin直接通过tick.datetime().date()获取，
-            // 则后者多了一天，导致bug
-            // 解决办法，减去1毫秒之后，再取日期
-            let bar_endtime = realday.and_time(bt.nominal_begin).add(bt.duration);
-            let zerovol = self.create_zero_vol_bar(idx, &bar_endtime, tradeday);
-            self.zerovol_bar_vec.push(zerovol);
+                // bugfix: 由于比较tick时间时左开右闭(]的操作，对于跨零点的tick,
+                // 比如，前一tick 2021-11-08 23:59:59.500, 后一tick 2021-11-09 00:00:00,
+                // 它们是在同一个slot里面的，如果newbar.begin直接通过tick.datetime().date()获取，
+                // 则后者多了一天，导致bug
+                // 解决办法，减去1毫秒之后，再取日期
+                let bar_endtime = realday.and_time(bt.nominal_begin).add(bt.duration);
+                let zerovol = self.create_zero_vol_bar(idx, &bar_endtime, tradeday);
+                self.zerovol_bar_vec.push(zerovol);
+            }
         }
     }
 
