@@ -171,8 +171,8 @@ impl SingleBarBuilder {
         self.to_cmp.virtual_end = ShiftedTime::from(tick.datetime().time());
         self.tick_idx = Self::search_end_time_index(&self.to_cmp, &self.bar_time_vec);
 
-        #[cfg(debug_assertions)]
-        println!("bs {:>4}, tick_idx {}", self.barsz_sec, self.tick_idx);
+        // #[cfg(debug_assertions)]
+        // println!("bs {:>4}, tick_idx {}", self.barsz_sec, self.tick_idx);
 
         if self.tick_idx < 0 {
             // 下一周期tick数据无效，不在Bar的范围，无需创建新bar
@@ -275,11 +275,11 @@ impl SingleBarBuilder {
         debug_assert!(self.tick_idx >= 0);
         debug_assert!(self.last_bar.is_some());
 
-        #[cfg(debug_assertions)]
-        println!(
-            "bs {:>4}, tick_idx {}, bar_idx {}",
-            self.barsz_sec, self.tick_idx, self.last_cache.last_bar_index
-        );
+        // #[cfg(debug_assertions)]
+        // println!(
+        //     "bs {:>4}, tick_idx {}, bar_idx {}",
+        //     self.barsz_sec, self.tick_idx, self.last_cache.last_bar_index
+        // );
 
         if self.tick_idx == self.last_cache.last_bar_index {
             // 情况一： 两者在同一个槽子里面
