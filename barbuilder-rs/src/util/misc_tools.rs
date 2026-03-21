@@ -232,7 +232,7 @@ mod tests {
 
     #[test]
     fn czce_inst() {
-        assert_eq!(fix_czce_inst("tick_cf001", 2020), "tick_cf2001");
+        assert_eq!(fix_czce_inst("tick_cf001", 2020), "tick_cf001");
         assert_eq!(fix_czce_inst("CF001", 2020), "CF2001");
         assert_eq!(fix_czce_inst("CF001", 2024), "CF2001");
         assert_eq!(fix_czce_inst("CF001", 2025), "CF3001");

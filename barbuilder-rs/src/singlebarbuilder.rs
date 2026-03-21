@@ -7,7 +7,7 @@ use std::ops::Sub;
 
 use crate::BarTime;
 use crate::Ticklike;
-use crate::data_impl::BarData;
+use crate::data_impl::BarImpl;
 use crate::util::simple_bisect;
 use tradesession::ShiftedTime;
 
@@ -56,15 +56,15 @@ pub struct SingleBarBuilder {
     pub(crate) tick_idx: i32,
 
     /// 最近的非zero_vol_bar, 一旦关闭，就被take()拿走
-    pub(crate) last_bar: Option<BarData>,
+    pub(crate) last_bar: Option<BarImpl>,
 
     /// 在本次on_tick事件中，关闭的Bar，
     /// 为什么使用Vec而不是单个Barlik，因为中途可能有补充的 Zero Volume Bar ？
     /// 是否可以确保，每一个tick到来之后，最多close一个bar？ 存疑
-    pub(crate) opt_closed_this_tick: Option<BarData>,
+    pub(crate) opt_closed_this_tick: Option<BarImpl>,
 
     /// 如果本周期需要创建zero_vol_bar,放在这里
-    pub(crate) zerovol_bar_vec: Vec<BarData>,
+    pub(crate) zerovol_bar_vec: Vec<BarImpl>,
 
     /// 临时变量，用于搜索，避免反复构造销毁
     to_cmp: BarTime,
@@ -114,7 +114,7 @@ impl SingleBarBuilder {
     ///
     /// 有prebar的情况，比如实盘中在极短后重启软件时，有保存加载机制，加载了旧Bar,
     /// 而且这个bar的周期比较长，比如30分K,或者小时K,尚未走完，则可以利用上这个prebar
-    pub fn set_pre_bar(&mut self, mut bar: BarData) -> Result<()> {
+    pub fn set_pre_bar(&mut self, mut bar: BarImpl) -> Result<()> {
         if self.tick_idx >= 0 || self.last_cache.last_bar_index >= 0 {
             return Err(anyhow!("set_pre_bar() must called before any on_tick()"));
         }
@@ -246,7 +246,7 @@ impl SingleBarBuilder {
 
     pub(crate) fn emit_bar_close(
         &mut self,
-        mut bar: BarData,
+        mut bar: BarImpl,
         is_force_close: bool,
         debug_str: &str,
         tick: Option<&dyn Ticklike>,
@@ -338,7 +338,7 @@ impl SingleBarBuilder {
         bar.turnover += tick.tnov_delta();
         bar.openint = tick.openint();
 
-        bar.finished = tick.datetime() >= &bar.internal_end;
+        bar.finished = tick.datetime() >= bar.internal_end;
 
         if bar.finished {
             let last = self.last_bar.take().expect("no fail");
@@ -372,7 +372,7 @@ impl SingleBarBuilder {
             let realday = tick.datetime().sub(Duration::milliseconds(1)).date();
 
             // 不含end_exclude
-            self.create_zero_vol_bar_batch(start, end_exclude, &realday, tick.tradeday());
+            self.create_zero_vol_bar_batch(start, end_exclude, &realday, &tick.tradeday());
         }
 
         // 当前tick并未用掉, 返回true
@@ -381,6 +381,9 @@ impl SingleBarBuilder {
 
     pub fn create_new_bar(&mut self, tick: &dyn Ticklike) {
         debug_assert!(self.tick_idx >= 0);
+
+        let tick_datetime = tick.datetime();
+
         // 需要判断前一个bar被强制关闭，但tick属于前一个bar的情况，
         // 这个在same_slot()调用后，由于vol非零，返回值为true
 
@@ -402,7 +405,7 @@ impl SingleBarBuilder {
                 log::warn!(
                     "create_new_after_bar_closed. {}, tick {}, bar {}({})",
                     self.inst,
-                    tick.datetime(),
+                    tick_datetime,
                     bar.begin,
                     self.barsz_sec
                 );
@@ -410,7 +413,7 @@ impl SingleBarBuilder {
         }
 
         let bt = &self.bar_time_vec[self.tick_idx as usize];
-        let mut newbar = BarData::new_empty();
+        let mut newbar = BarImpl::new_empty();
 
         // bugfix: 由于比较tick时间时左开右闭(]的操作，对于跨零点的tick,
         // 比如，前一tick 2021-11-08 23:59:59.500, 后一tick 2021-11-09 00:00:00,
@@ -421,8 +424,7 @@ impl SingleBarBuilder {
         // 时间部分，取bar_time_vec里面的nominal_begin作为开始时间，对于上面的后者，
         // begin time为0点整向前推一个时间周期
 
-        let begin_ = tick
-            .datetime()
+        let begin_ = tick_datetime
             .sub(Duration::milliseconds(1))
             .date()
             .and_time(bt.nominal_begin);
@@ -455,7 +457,7 @@ impl SingleBarBuilder {
         newbar.low = newbar.open;
         newbar.close = newbar.open;
         newbar.openint = tick.openint();
-        newbar.tradeday = *tick.tradeday();
+        newbar.tradeday = tick.tradeday();
         newbar.volume = tick.vol_delta();
         newbar.turnover = tick.tnov_delta();
         // 注意： 缺省是true, 这里需要重置为false
@@ -467,7 +469,7 @@ impl SingleBarBuilder {
             self.inst,
             self.barsz_sec,
             newbar.begin,
-            tick.datetime().format(FMT_TICK_TIME),
+            tick_datetime.format(FMT_TICK_TIME),
         );
 
         self.last_cache.last_bar_end = newbar.internal_end;
@@ -482,9 +484,9 @@ impl SingleBarBuilder {
         bar_idx: i32,
         bar_end_time: &NaiveDateTime,
         tradeday: &NaiveDate,
-    ) -> BarData {
+    ) -> BarImpl {
         let bt: &BarTime = &self.bar_time_vec[bar_idx as usize];
-        let mut bar = BarData::new_empty();
+        let mut bar = BarImpl::new_empty();
 
         bar.tradeday = *tradeday;
         bar.begin = *bar_end_time - bt.duration;

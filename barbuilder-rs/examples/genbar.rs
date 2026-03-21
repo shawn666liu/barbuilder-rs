@@ -1,13 +1,13 @@
 use anyhow::Result;
 use barbuilder::{
     InstBarBuilder,
-    data_impl::{BarData, TickData},
+    data_impl::{BarImpl, TickImpl},
 };
 use chrono::{Duration, NaiveDateTime};
 use csv;
 use tradesession::TradeSession;
 
-fn print_bar(bar: &BarData) {
+fn print_bar(bar: &BarImpl) {
     println!(
         "   {}, {} ~ {}, ohlc({}, {}, {}, {}), v {}",
         bar.barsz_sec / 60,
@@ -32,13 +32,13 @@ fn main() -> Result<()> {
 
     let mut prev_volume = 0;
     let mut prev_turnover = 0.0;
-    let mut closed_this_tick: Vec<BarData> = vec![];
-    let mut updated_this_tick: Vec<BarData> = vec![];
+    let mut closed_this_tick: Vec<BarImpl> = vec![];
+    let mut updated_this_tick: Vec<BarImpl> = vec![];
     let mut tick_index = 0;
     let mut tick_time = NaiveDateTime::default();
     for result in rdr.deserialize() {
         tick_index += 1;
-        let mut tick: TickData = result?;
+        let mut tick: TickImpl = result?;
         tick.vol_delta = tick.volume.saturating_sub(prev_volume);
         tick.tnov_delta = tick.turnover - prev_turnover;
 

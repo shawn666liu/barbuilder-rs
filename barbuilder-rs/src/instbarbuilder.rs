@@ -3,7 +3,7 @@ use chrono::{Duration, NaiveDateTime};
 use std::collections::HashMap;
 use tradesession::TradeSession;
 
-use crate::data_impl::BarData;
+use crate::data_impl::BarImpl;
 use crate::{BarTime, SingleBarBuilder, Ticklike};
 
 /// 针对某个合约所有时间周期Bar的生成器
@@ -97,7 +97,7 @@ impl InstBarBuilder {
     }
 
     /// 注意!!! 必须在on_tick调用之前，任何on_tick调用之后，都不能再设置prebar
-    pub fn set_pre_bars(&mut self, mut pre_bars: HashMap<u32, BarData>) -> Result<()> {
+    pub fn set_pre_bars(&mut self, mut pre_bars: HashMap<u32, BarImpl>) -> Result<()> {
         for bb in self.single_bb_map.iter_mut() {
             if let Some(pre_bar) = pre_bars.remove(&bb.barsz_sec()) {
                 bb.set_pre_bar(pre_bar)?;
@@ -119,17 +119,17 @@ impl InstBarBuilder {
     /// closed_this_tick: 本tick内关闭的bar，
     /// updated_this_tick: 收集Bar的实时变化信息，高开低收量，适用每tick推送的场景，  
     /// 输出都是小周期的在前
-    pub fn on_tick<T>(
+    pub fn on_tick<T, B>(
         &mut self,
-        tick: &dyn Ticklike,
-        closed_this_tick: &mut Vec<T>,
-        updated_this_tick: Option<&mut Vec<T>>,
+        tick: &T,
+        closed_this_tick: &mut Vec<B>,
+        updated_this_tick: Option<&mut Vec<B>>,
     ) -> bool
     where
-        T: for<'a> From<&'a BarData>,
+        T: Ticklike,
+        B: for<'a> From<&'a BarImpl>,
     {
         self.need_create_barsz.clear();
-        // self.closed_this_tick.clear();
 
         // log::trace!("on_tick, {}", tick);
         let mut tick_time_in_session = true;
@@ -185,7 +185,7 @@ impl InstBarBuilder {
                     self.bar_end_time = self.bar_end_time.min(*bb.last_bar_end());
                 }
                 if bar.volume > 0 || self.zero_vol_bar {
-                    closed_this_tick.push(T::from(&bar));
+                    closed_this_tick.push(B::from(&bar));
                 }
             }
         }
@@ -197,11 +197,10 @@ impl InstBarBuilder {
                 bb.create_new_bar(tick);
             }
         }
-        // self.recent_time = *tick.datetime();
 
         if self.zero_vol_bar {
             for bb in self.single_bb_map.iter_mut() {
-                closed_this_tick.extend(bb.zerovol_bar_vec.iter().map(|b| T::from(b)));
+                closed_this_tick.extend(bb.zerovol_bar_vec.iter().map(|b| B::from(b)));
                 bb.zerovol_bar_vec.clear();
             }
         }
@@ -233,7 +232,7 @@ impl InstBarBuilder {
         threshold: chrono::TimeDelta,
         closed_bars: &mut Vec<T>,
     ) where
-        T: for<'a> From<&'a BarData>,
+        T: for<'a> From<&'a BarImpl>,
     {
         // 因为这里只有closed_bars，且被take, 所以无需处理created_this_tick
         for bb in self.single_bb_map.iter_mut() {
@@ -251,7 +250,7 @@ impl InstBarBuilder {
     /// 强制完成在force_end_time点上未结束的bar，并收集这些Bar，输出都是小周期的在前
     pub fn force_finish<T>(&mut self, force_end_time: &NaiveDateTime, force_closed: &mut Vec<T>)
     where
-        T: for<'a> From<&'a BarData>,
+        T: for<'a> From<&'a BarImpl>,
     {
         self.on_timer(force_end_time, Duration::zero(), force_closed);
     }

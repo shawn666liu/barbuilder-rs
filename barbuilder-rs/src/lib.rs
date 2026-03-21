@@ -17,11 +17,11 @@ mod tests {
     use std::{collections::HashMap, str::FromStr};
 
     use super::*;
-    use crate::data_impl::{BarData, TickData};
+    use crate::data_impl::{BarImpl, TickImpl};
     use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
     use tradesession::TradeSession;
 
-    fn print_bar(bar: &BarData) {
+    fn print_bar(bar: &BarImpl) {
         println!(
             "   {}, {} ~ {}, ohlc({}, {}, {}, {}), v {}",
             bar.barsz_sec / 60,
@@ -50,7 +50,7 @@ mod tests {
         };
 
         let ts = TradeSession::new_commodity_session_night();
-        let mut bar = BarData::default();
+        let mut bar = BarImpl::default();
         let date = NaiveDate::from_ymd_opt(2025, 7, 23).expect("");
         let time = NaiveTime::from_hms_opt(9, minutes, 0).expect("");
         bar.begin = NaiveDateTime::new(date, time);
@@ -63,13 +63,13 @@ mod tests {
         bar.volume = 100;
         bar.openint = 482770;
         bar.turnover = 94017413385.0;
-        let mut prebars: HashMap<u32, BarData> = HashMap::new();
+        let mut prebars: HashMap<u32, BarImpl> = HashMap::new();
         prebars.insert(barsize_sec, bar);
         let mut bb = InstBarBuilder::new1("ag2510", &vec![barsize_sec], &ts, true);
         bb.set_pre_bars(prebars)?;
-        let mut closed_this_tick: Vec<BarData> = vec![];
-        let mut updated_this_tick: Vec<BarData> = vec![];
-        let mut tick = TickData::default();
+        let mut closed_this_tick: Vec<BarImpl> = vec![];
+        let mut updated_this_tick: Vec<BarImpl> = vec![];
+        let mut tick = TickImpl::default();
         tick.datetime = date.and_hms_milli_opt(9, 16, 10, 500).expect("");
         tick.tradeday = date;
         tick.last = 9478.0;

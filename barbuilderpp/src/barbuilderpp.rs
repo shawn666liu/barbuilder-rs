@@ -4,7 +4,8 @@ use anyhow::Result;
 use chrono::{DateTime, Datelike, NaiveDate};
 use std::collections::HashMap;
 
-use barbuilder::data_impl::{BarData, TickData};
+use barbuilder::Ticklike;
+use barbuilder::data_impl::{BarImpl, TickImpl};
 
 use crate::ffi::{CppBar, CppTick};
 
@@ -28,6 +29,7 @@ pub fn create_inst_barbuilder(
 
 #[cxx::bridge(namespace = "rustpp")]
 mod ffi {
+
     #[derive(Clone, Debug, Default)]
     struct CppBar {
         /// days since epoch
@@ -125,19 +127,19 @@ mod ffi {
     }
 }
 
-impl Into<BarData> for CppBar {
-    fn into(self) -> BarData {
+impl Into<BarImpl> for CppBar {
+    fn into(self) -> BarImpl {
         (&self).into()
     }
 }
-impl Into<BarData> for &CppBar {
-    fn into(self) -> BarData {
+impl Into<BarImpl> for &CppBar {
+    fn into(self) -> BarImpl {
         let days_from_ce = self.tradeday + 719163;
         let trade_day = NaiveDate::from_num_days_from_ce_opt(days_from_ce)
             .expect("from_num_days_from_ce_opt() failed");
         let begin = DateTime::from_timestamp_nanos(self.begin).naive_utc();
         let internal_end = DateTime::from_timestamp_nanos(self.internal_end).naive_utc();
-        BarData::new(
+        BarImpl::new(
             trade_day,
             begin,
             internal_end,
@@ -154,8 +156,8 @@ impl Into<BarData> for &CppBar {
         )
     }
 }
-impl From<&BarData> for CppBar {
-    fn from(v: &BarData) -> Self {
+impl From<&BarImpl> for CppBar {
+    fn from(v: &BarImpl) -> Self {
         let days_since_epoch = v.tradeday.num_days_from_ce() - 719163;
         let nanos_since_epoch = v
             .begin
@@ -184,41 +186,79 @@ impl From<&BarData> for CppBar {
         }
     }
 }
-impl From<BarData> for CppBar {
-    fn from(value: BarData) -> Self {
+impl From<BarImpl> for CppBar {
+    fn from(value: BarImpl) -> Self {
         Self::from(&value)
     }
 }
 
-impl Into<TickData> for &CppTick {
-    fn into(self) -> TickData {
+// impl Into<TickImpl> for &CppTick {
+//     fn into(self) -> TickImpl {
+//         let days_from_ce = self.tradeday + 719163;
+//         let date = NaiveDate::from_num_days_from_ce_opt(days_from_ce)
+//             .expect("from_num_days_from_ce_opt() failed");
+//         let time = DateTime::from_timestamp_nanos(self.datetime).naive_utc();
+//         TickImpl::new(
+//             date,
+//             time,
+//             self.last,
+//             self.openint,
+//             self.volume,
+//             self.turnover,
+//             self.vol_delta,
+//             self.tnov_delta,
+//         )
+//     }
+// }
+
+// impl Into<TickImpl> for CppTick {
+//     fn into(self) -> TickImpl {
+//         (&self).into()
+//     }
+// }
+
+impl Ticklike for CppTick {
+    fn tradeday(&self) -> NaiveDate {
         let days_from_ce = self.tradeday + 719163;
         let date = NaiveDate::from_num_days_from_ce_opt(days_from_ce)
             .expect("from_num_days_from_ce_opt() failed");
-        let time = DateTime::from_timestamp_nanos(self.datetime).naive_utc();
-        TickData::new(
-            date,
-            time,
-            self.last,
-            self.openint,
-            self.volume,
-            self.turnover,
-            self.vol_delta,
-            self.tnov_delta,
-        )
+        date
     }
-}
 
-impl Into<TickData> for CppTick {
-    fn into(self) -> TickData {
-        (&self).into()
+    fn datetime(&self) -> chrono::NaiveDateTime {
+        let time = DateTime::from_timestamp_nanos(self.datetime).naive_utc();
+        time
+    }
+
+    fn last_price(&self) -> f64 {
+        self.last
+    }
+
+    fn openint(&self) -> u64 {
+        self.openint
+    }
+
+    fn volume(&self) -> u64 {
+        self.volume
+    }
+
+    fn turnover(&self) -> f64 {
+        self.turnover
+    }
+
+    fn vol_delta(&self) -> u64 {
+        self.vol_delta
+    }
+
+    fn tnov_delta(&self) -> f64 {
+        self.tnov_delta
     }
 }
 
 impl InstBarBuilderPP {
     pub fn set_pre_bars(&mut self, pre_bars: &Vec<ffi::CppBar>) -> Result<()> {
         if !pre_bars.is_empty() {
-            let pre_bars: HashMap<u32, BarData> = pre_bars
+            let pre_bars: HashMap<u32, BarImpl> = pre_bars
                 .iter()
                 .map(|bar| (bar.barsz_sec, bar.into()))
                 .collect();
@@ -234,12 +274,11 @@ impl InstBarBuilderPP {
         tick: &CppTick,
         realtime_feed: bool,
     ) -> bool {
-        let tick: TickData = tick.into();
         if realtime_feed {
             self.instbb
-                .on_tick(&tick, closed_this_tick, Some(updated_this_tick))
+                .on_tick(tick, closed_this_tick, Some(updated_this_tick))
         } else {
-            self.instbb.on_tick(&tick, closed_this_tick, None)
+            self.instbb.on_tick(tick, closed_this_tick, None)
         }
     }
     pub fn on_tick_detail(
@@ -260,7 +299,7 @@ impl InstBarBuilderPP {
         let date = NaiveDate::from_num_days_from_ce_opt(days_from_ce)
             .expect("from_num_days_from_ce_opt() failed");
         let time = DateTime::from_timestamp_nanos(datetime).naive_utc();
-        let tick = TickData::new(
+        let tick = TickImpl::new(
             date, time, last_price, openint, volume, turnover, vol_delta, tnov_delta,
         );
         if realtime_feed {

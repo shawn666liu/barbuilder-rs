@@ -40,15 +40,15 @@ pub struct BarData {
     /// 是否因本tick触发而创建,上级on_tick调用时知道哪些bar是该tick新创建的
     pub created_this_tick: bool,
 }
-impl Into<barbuilder::data_impl::BarData> for BarData {
-    fn into(self) -> barbuilder::data_impl::BarData {
+impl Into<barbuilder::data_impl::BarImpl> for BarData {
+    fn into(self) -> barbuilder::data_impl::BarImpl {
         (&self).into()
     }
 }
 
-impl Into<barbuilder::data_impl::BarData> for &BarData {
-    fn into(self) -> barbuilder::data_impl::BarData {
-        barbuilder::data_impl::BarData::new(
+impl Into<barbuilder::data_impl::BarImpl> for &BarData {
+    fn into(self) -> barbuilder::data_impl::BarImpl {
+        barbuilder::data_impl::BarImpl::new(
             self.tradeday,
             self.begin,
             self.internal_end,
@@ -66,8 +66,8 @@ impl Into<barbuilder::data_impl::BarData> for &BarData {
     }
 }
 
-impl From<&barbuilder::data_impl::BarData> for BarData {
-    fn from(v: &barbuilder::data_impl::BarData) -> Self {
+impl From<&barbuilder::data_impl::BarImpl> for BarData {
+    fn from(v: &barbuilder::data_impl::BarImpl) -> Self {
         BarData {
             tradeday: v.tradeday,
             begin: v.begin,
@@ -85,8 +85,8 @@ impl From<&barbuilder::data_impl::BarData> for BarData {
         }
     }
 }
-impl From<barbuilder::data_impl::BarData> for BarData {
-    fn from(value: barbuilder::data_impl::BarData) -> Self {
+impl From<barbuilder::data_impl::BarImpl> for BarData {
+    fn from(value: barbuilder::data_impl::BarImpl) -> Self {
         Self::from(&value)
     }
 }
@@ -119,11 +119,11 @@ pub struct TickData {
 }
 
 impl Ticklike for &TickData {
-    fn tradeday(&self) -> &chrono::NaiveDate {
-        &self.tradeday
+    fn tradeday(&self) -> chrono::NaiveDate {
+        self.tradeday
     }
-    fn datetime(&self) -> &chrono::NaiveDateTime {
-        &self.datetime
+    fn datetime(&self) -> chrono::NaiveDateTime {
+        self.datetime
     }
     fn last_price(&self) -> f64 {
         self.last
@@ -146,11 +146,11 @@ impl Ticklike for &TickData {
 }
 
 impl Ticklike for TickData {
-    fn tradeday(&self) -> &chrono::NaiveDate {
-        &self.tradeday
+    fn tradeday(&self) -> chrono::NaiveDate {
+        self.tradeday
     }
-    fn datetime(&self) -> &chrono::NaiveDateTime {
-        &self.datetime
+    fn datetime(&self) -> chrono::NaiveDateTime {
+        self.datetime
     }
     fn last_price(&self) -> f64 {
         self.last
@@ -205,7 +205,7 @@ impl InstBarBuilder {
     /// 注意!!! 必须在on_tick调用之前，任何on_tick调用之后，都不能再设置prebar
     pub fn set_pre_bars(&mut self, pre_bar_map: HashMap<u32, BarData>) -> PyResult<()> {
         if !pre_bar_map.is_empty() {
-            let pre_bars: HashMap<u32, barbuilder::data_impl::BarData> = pre_bar_map
+            let pre_bars: HashMap<u32, barbuilder::data_impl::BarImpl> = pre_bar_map
                 .iter()
                 .map(|(sz, bar)| (*sz, bar.into()))
                 .collect();
@@ -256,7 +256,7 @@ impl InstBarBuilder {
         tnov_delta: f64,
         realtime_feed: bool,
     ) -> (bool, Vec<BarData>, Option<Vec<BarData>>) {
-        let tick = barbuilder::data_impl::TickData {
+        let tick = barbuilder::data_impl::TickImpl {
             tradeday,
             datetime,
             last,

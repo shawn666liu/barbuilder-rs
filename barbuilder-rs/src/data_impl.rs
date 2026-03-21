@@ -18,7 +18,7 @@ where
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
-pub struct BarData {
+pub struct BarImpl {
     pub tradeday: NaiveDate,
     pub begin: NaiveDateTime,
     /// 内部使用，提前算好，空间换时间，
@@ -42,7 +42,7 @@ pub struct BarData {
     pub created_this_tick: bool,
 }
 
-impl BarData {
+impl BarImpl {
     /// default()并设置created_this_tick
     pub fn new_empty() -> Self {
         let mut b = Self::default();
@@ -83,14 +83,14 @@ impl BarData {
     }
 }
 
-impl From<&BarData> for BarData {
-    fn from(value: &BarData) -> Self {
+impl From<&BarImpl> for BarImpl {
+    fn from(value: &BarImpl) -> Self {
         value.clone()
     }
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
-pub struct TickData {
+pub struct TickImpl {
     pub tradeday: NaiveDate,
     #[serde(deserialize_with = "deserialize_datetime_with_millis")]
     pub datetime: NaiveDateTime,
@@ -104,7 +104,7 @@ pub struct TickData {
     pub tnov_delta: f64,
 }
 
-impl TickData {
+impl TickImpl {
     pub fn new(
         trade_day: NaiveDate,
         datetime: NaiveDateTime,
@@ -128,39 +128,12 @@ impl TickData {
     }
 }
 
-impl Ticklike for &TickData {
-    fn tradeday(&self) -> &chrono::NaiveDate {
-        &self.tradeday
+impl Ticklike for TickImpl {
+    fn tradeday(&self) -> chrono::NaiveDate {
+        self.tradeday
     }
-    fn datetime(&self) -> &chrono::NaiveDateTime {
-        &self.datetime
-    }
-    fn last_price(&self) -> f64 {
-        self.last
-    }
-    fn openint(&self) -> u64 {
-        self.openint
-    }
-    fn volume(&self) -> u64 {
-        self.volume
-    }
-    fn turnover(&self) -> f64 {
-        self.turnover
-    }
-    fn vol_delta(&self) -> u64 {
-        self.vol_delta
-    }
-    fn tnov_delta(&self) -> f64 {
-        self.tnov_delta
-    }
-}
-
-impl Ticklike for TickData {
-    fn tradeday(&self) -> &chrono::NaiveDate {
-        &self.tradeday
-    }
-    fn datetime(&self) -> &chrono::NaiveDateTime {
-        &self.datetime
+    fn datetime(&self) -> chrono::NaiveDateTime {
+        self.datetime
     }
     fn last_price(&self) -> f64 {
         self.last
