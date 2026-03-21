@@ -22,13 +22,13 @@ fn print_bar(bar: &BarImpl) {
 }
 
 fn main() -> Result<()> {
-    let bar_size_vec = vec![900, 3600];
+    let bar_size_vec = vec![60, 180, 300, 900, 1800, 3600];
 
     let ts = TradeSession::new_commodity_session_night();
 
-    let mut closed_this_tick: Vec<BarImpl> = Vec::with_capacity(20);
-    let mut updated_this_tick: Vec<BarImpl> = Vec::with_capacity(20);
-    let mut all_bars: Vec<BarImpl> = Vec::with_capacity(100);
+    let mut closed_this_tick: Vec<BarImpl> = Vec::with_capacity(10);
+    let mut updated_this_tick: Vec<BarImpl> = Vec::with_capacity(10);
+    let mut all_bars: Vec<BarImpl> = Vec::with_capacity(1000);
 
     let start = Local::now().naive_local();
 
