@@ -184,9 +184,9 @@ impl InstBarBuilder {
                     }
                     self.bar_end_time = self.bar_end_time.min(*bb.last_bar_end());
                 }
-                if bar.volume > 0 || self.zero_vol_bar {
-                    closed_this_tick.push(B::from(&bar));
-                }
+                // 20260429 fix: 即使vol是零，但这是on_tick推送过来的零，也记录下来;
+                // 只有那种在该合约交易的Bar时间段中，没有任何推送的合约，才受到zero_vol_bar的影响
+                closed_this_tick.push(B::from(&bar));
             }
         }
 
